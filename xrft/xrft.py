@@ -488,6 +488,8 @@ def ifft(
     chunks_to_segments=False,
     prefix="freq_",
     lag=None,
+    stochastic=False,
+    distrib=None,
     **kwargs,
 ):
     """
@@ -528,6 +530,9 @@ def ifft(
         If defined, lag must have same length as dim.
         If lag is a sequence, a None element means that 'direct_lag' attribute will be used for the corresponding dimension
         Manually set lag to zero to get output coordinates centered on zero.
+    stochastic : bool, optional (default=False)
+	If set to True, apply stochastic noise given by 'distrib' 
+    distrib : distribution used to perturbe Fourier modes if stochastic=True. Should be complex. If None, will generate it as Gaussian white noise with mean=0.0 and std=1.0.
 
 
     Returns
@@ -558,7 +563,7 @@ def ifft(
     if lag is None:
         lag = [daft[d].attrs.get("direct_lag", 0.0) for d in dim]
         msg = "Default ifft's behaviour (lag=None) changed! Default value of lag was zero (centered output coordinates) and is now set to transformed coordinate's attribute: 'direct_lag'."
-        warnings.warn(msg, FutureWarning)
+        #warnings.warn(msg, FutureWarning)
     else:
         if isinstance(lag, float) or isinstance(lag, int):
             lag = [lag]
@@ -572,9 +577,14 @@ def ifft(
             for d, l in zip(dim, lag)
         ]  # enable lag of the form [3.2, None, 7]
 
-    if true_phase:
+    if true_phase or stochastic:
         for d, l in zip(dim, lag):
             daft = daft * np.exp(1j * 2.0 * np.pi * daft[d] * l)
+        if stochastic:
+           if distrib is None:
+              distrib=(np.random.normal(0.0, 1.0, (len(daft.coords[dim[0]]), len(daft.coords[dim[1]]))) \
+                       +1j*np.random.normal(0.0, 1.0, (len(daft.coords[dim[0]]), len(daft.coords[dim[1]]))))
+           daft = daft * distrib
 
     if chunks_to_segments:
         daft = _stack_chunks(daft, dim)
